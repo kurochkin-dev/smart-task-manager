@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-task-manager-app
+    restart: unless-stopped
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php/local.ini:/usr/local/etc/php/conf.d/local.ini
+    networks:
+      - smart-task-manager
+    depends_on:
+      - db
+      - redis
+
+  nginx:
+    image: nginx:alpine
+    container_name: smart-task-manager-nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf
+    networks:
+      - smart-task-manager
+    depends_on:
+      - app
+
+  db:
+    image: postgres:17
+    container_name: smart-task-manager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smart_task_manager
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - smart-task-manager
+
+  redis:
+    image: redis:7-alpine
+    container_name: smart-task-manager-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - smart-task-manager
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: smart-task-manager-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - smart-task-manager
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smart-task-manager-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - smart-task-manager
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: smart-task-manager-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: admin
+    ports:
+      - "5672:5672"    # AMQP port
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - smart-task-manager
+
+volumes:
+  postgres_data:
+  grafana_data:
+  redis_data:
+  rabbitmq_data:
+
+networks:
+  smart-task-manager:
+    driver: bridge
