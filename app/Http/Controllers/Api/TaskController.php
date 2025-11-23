@@ -3,15 +3,27 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\StoreTaskRequest;
+use App\Http\Requests\UpdateTaskRequest;
+use App\Http\Resources\TaskResource;
 use App\Models\Task;
+use App\Models\User;
+use App\Models\Project;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 
+/**
+ * @OA\Tag(
+ *     name="Tasks",
+ *     description="Управление задачами"
+ * )
+ */
 class TaskController extends Controller
 {
     /**
-     * Получить список всех задач
-     * GET /api/tasks
+     * @OA\Get(path="/api/tasks", summary="Список задач", tags={"Tasks"},
+     *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse")
+     * )
      */
     public function index(): JsonResponse
     {
@@ -19,41 +31,34 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $tasks
+            'data' => TaskResource::collection($tasks)
         ]);
     }
 
     /**
-     * Создать новую задачу
-     * POST /api/tasks
+     * @OA\Post(path="/api/tasks", summary="Создать задачу", tags={"Tasks"},
+     *     @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/TaskInput")),
+     *     @OA\Response(response=201, ref="#/components/responses/CreatedResponse"),
+     *     @OA\Response(response=422, ref="#/components/responses/ValidationError")
+     * )
      */
-    public function store(Request $request): JsonResponse
+    public function store(StoreTaskRequest $request): JsonResponse
     {
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'priority' => 'in:low,medium,high,urgent',
-            'estimated_hours' => 'nullable|integer|min:1',
-            'required_skills' => 'nullable|array',
-            'complexity' => 'integer|min:1|max:5',
-            'due_date' => 'nullable|date',
-            'project_id' => 'required|exists:projects,id',
-            'assigned_user_id' => 'nullable|exists:users,id',
-            'created_by' => 'required|exists:users,id',
-        ]);
-
-        $task = Task::create($validated);
+        $task = Task::create($request->validated());
 
         return response()->json([
             'success' => true,
             'message' => 'Задача успешно создана',
-            'data' => $task
+            'data' => new TaskResource($task)
         ], 201);
     }
 
     /**
-     * Получить конкретную задачу
-     * GET /api/tasks/{id}
+     * @OA\Get(path="/api/tasks/{id}", summary="Получить задачу", tags={"Tasks"},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, ref="#/components/responses/ItemResponse"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     * )
      */
     public function show(Task $task): JsonResponse
     {
@@ -61,41 +66,36 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'data' => $task
+            'data' => new TaskResource($task)
         ]);
     }
 
     /**
-     * Обновить задачу
-     * PUT/PATCH /api/tasks/{id}
+     * @OA\Put(path="/api/tasks/{id}", summary="Обновить задачу", tags={"Tasks"},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/TaskInput")),
+     *     @OA\Response(response=200, ref="#/components/responses/UpdatedResponse"),
+     *     @OA\Response(response=422, ref="#/components/responses/ValidationError"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     * )
      */
-    public function update(Request $request, Task $task): JsonResponse
+    public function update(UpdateTaskRequest $request, Task $task): JsonResponse
     {
-        $validated = $request->validate([
-            'title' => 'sometimes|string|max:255',
-            'description' => 'nullable|string',
-            'status' => 'sometimes|in:pending,in_progress,completed,cancelled',
-            'priority' => 'sometimes|in:low,medium,high,urgent',
-            'estimated_hours' => 'nullable|integer|min:1',
-            'actual_hours' => 'integer|min:0',
-            'required_skills' => 'nullable|array',
-            'complexity' => 'integer|min:1|max:5',
-            'due_date' => 'nullable|date',
-            'assigned_user_id' => 'nullable|exists:users,id',
-        ]);
-
-        $task->update($validated);
+        $task->update($request->validated());
 
         return response()->json([
             'success' => true,
             'message' => 'Задача успешно обновлена',
-            'data' => $task
+            'data' => new TaskResource($task)
         ]);
     }
 
     /**
-     * Удалить задачу
-     * DELETE /api/tasks/{id}
+     * @OA\Delete(path="/api/tasks/{id}", summary="Удалить задачу", tags={"Tasks"},
+     *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, ref="#/components/responses/DeletedResponse"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     * )
      */
     public function destroy(Task $task): JsonResponse
     {
@@ -104,6 +104,71 @@ class TaskController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Задача успешно удалена'
+        ]);
+    }
+
+    /**
+     * @OA\Get(path="/api/tasks/user/{user}", summary="Задачи пользователя", tags={"Tasks"},
+     *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     * )
+     */
+    public function getUserTasks(User $user): JsonResponse
+    {
+        $tasks = Task::where('assigned_user_id', $user->id)
+            ->with(['project', 'creator'])
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => TaskResource::collection($tasks)
+        ]);
+    }
+
+    /**
+     * @OA\Get(path="/api/tasks/project/{project}", summary="Задачи проекта", tags={"Tasks"},
+     *     @OA\Parameter(name="project", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     * )
+     */
+    public function getProjectTasks(Project $project): JsonResponse
+    {
+        $tasks = Task::where('project_id', $project->id)
+            ->with(['assignedUser', 'creator'])
+            ->get();
+
+        return response()->json([
+            'success' => true,
+            'data' => TaskResource::collection($tasks)
+        ]);
+    }
+
+    /**
+     * @OA\Post(path="/api/tasks/{task}/assign", summary="Назначить задачу", tags={"Tasks"},
+     *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="integer")),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(
+     *         required={"assigned_user_id"},
+     *         @OA\Property(property="assigned_user_id", type="integer", example=1)
+     *     )),
+     *     @OA\Response(response=200, ref="#/components/responses/UpdatedResponse"),
+     *     @OA\Response(response=422, ref="#/components/responses/ValidationError"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     * )
+     */
+    public function assignTask(Request $request, Task $task): JsonResponse
+    {
+        $validated = $request->validate([
+            'assigned_user_id' => 'required|exists:users,id'
+        ]);
+
+        $task->update($validated);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Задача успешно назначена',
+            'data' => new TaskResource($task->load(['assignedUser']))
         ]);
     }
 }

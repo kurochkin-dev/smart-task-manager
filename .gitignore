@@ -23,3 +23,25 @@
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# Swagger generated documentation
+/storage/api-docs/*.json
+/storage/api-docs/*.yaml
+
+# SQLite databases
+/database/*.sqlite
+/database/*.sqlite-journal
+/database/*.sqlite-wal
+/database/*.sqlite-shm
+
+# Compiled views
+/storage/framework/views/*
+
+# Logs
+/storage/logs/*.log
+
+# Docker volumes
+docker-data/
+
+# Tinker history
+/.config/psysh/psysh_history
