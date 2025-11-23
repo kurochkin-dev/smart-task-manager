@@ -9,9 +9,9 @@ use App\Http\Resources\TaskResource;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Project;
+use App\Services\TaskService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * @OA\Tag(
@@ -21,6 +21,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class TaskController extends Controller
 {
+    public function __construct(private readonly TaskService $taskService) {}
+
     /**
      * @OA\Get(
      *     path="/api/tasks",
@@ -35,9 +37,7 @@ class TaskController extends Controller
     {
         $this->authorize('viewAny', Task::class);
 
-        $tasks = Cache::remember('tasks:list', config('cache_ttl.lists'), function () {
-            return Task::with(['project', 'assignedUser', 'creator'])->get();
-        });
+        $tasks = $this->taskService->getAllTasks();
 
         return response()->json([
             'success' => true,
@@ -62,15 +62,7 @@ class TaskController extends Controller
     {
         $this->authorize('create', Task::class);
 
-        $task = Task::create($request->validated());
-
-        Cache::forget('tasks:list');
-        if ($task->project_id) {
-            Cache::forget("tasks:project:{$task->project_id}");
-        }
-        if ($task->assigned_user_id) {
-            Cache::forget("tasks:user:{$task->assigned_user_id}");
-        }
+        $task = $this->taskService->createTask($request->validated());
 
         return response()->json([
             'success' => true,
@@ -95,10 +87,7 @@ class TaskController extends Controller
     {
         $this->authorize('view', $task);
 
-        $cachedTask = Cache::remember("task:{$task->id}", config('cache_ttl.items'), function () use ($task) {
-            $task->load(['project', 'assignedUser', 'creator', 'taskLogs.user']);
-            return $task;
-        });
+        $cachedTask = $this->taskService->getTask($task->id);
 
         return response()->json([
             'success' => true,
@@ -125,27 +114,7 @@ class TaskController extends Controller
     {
         $this->authorize('update', $task);
 
-        $oldProjectId = $task->project_id;
-        $oldAssignedUserId = $task->assigned_user_id;
-
-        $task->update($request->validated());
-
-        Cache::forget("task:{$task->id}");
-        Cache::forget('tasks:list');
-        
-        if ($oldProjectId) {
-            Cache::forget("tasks:project:{$oldProjectId}");
-        }
-        if ($task->project_id && $task->project_id !== $oldProjectId) {
-            Cache::forget("tasks:project:{$task->project_id}");
-        }
-        
-        if ($oldAssignedUserId) {
-            Cache::forget("tasks:user:{$oldAssignedUserId}");
-        }
-        if ($task->assigned_user_id && $task->assigned_user_id !== $oldAssignedUserId) {
-            Cache::forget("tasks:user:{$task->assigned_user_id}");
-        }
+        $task = $this->taskService->updateTask($task, $request->validated());
 
         return response()->json([
             'success' => true,
@@ -171,20 +140,7 @@ class TaskController extends Controller
     {
         $this->authorize('delete', $task);
 
-        $projectId = $task->project_id;
-        $assignedUserId = $task->assigned_user_id;
-        $taskId = $task->id;
-
-        $task->delete();
-
-        Cache::forget("task:{$taskId}");
-        Cache::forget('tasks:list');
-        if ($projectId) {
-            Cache::forget("tasks:project:{$projectId}");
-        }
-        if ($assignedUserId) {
-            Cache::forget("tasks:user:{$assignedUserId}");
-        }
+        $this->taskService->deleteTask($task);
 
         return response()->json([
             'success' => true,
@@ -209,11 +165,7 @@ class TaskController extends Controller
     {
         $this->authorize('viewByUser', [Task::class, $user]);
 
-        $tasks = Cache::remember("tasks:user:{$user->id}", config('cache_ttl.lists'), function () use ($user) {
-            return Task::where('assigned_user_id', $user->id)
-                ->with(['project', 'creator'])
-                ->get();
-        });
+        $tasks = $this->taskService->getTasksByUser($user->id);
 
         return response()->json([
             'success' => true,
@@ -237,11 +189,7 @@ class TaskController extends Controller
     {
         $this->authorize('viewByProject', Task::class);
 
-        $tasks = Cache::remember("tasks:project:{$project->id}", config('cache_ttl.lists'), function () use ($project) {
-            return Task::where('project_id', $project->id)
-                ->with(['assignedUser', 'creator'])
-                ->get();
-        });
+        $tasks = $this->taskService->getTasksByProject($project->id);
 
         return response()->json([
             'success' => true,
@@ -272,22 +220,12 @@ class TaskController extends Controller
             'assigned_user_id' => 'required|exists:users,id'
         ]);
 
-        $oldAssignedUserId = $task->assigned_user_id;
-        $task->update($validated);
-
-        Cache::forget("task:{$task->id}");
-        Cache::forget('tasks:list');
-        if ($oldAssignedUserId) {
-            Cache::forget("tasks:user:{$oldAssignedUserId}");
-        }
-        if ($task->assigned_user_id) {
-            Cache::forget("tasks:user:{$task->assigned_user_id}");
-        }
+        $task = $this->taskService->assignTask($task, $validated['assigned_user_id']);
 
         return response()->json([
             'success' => true,
             'message' => 'Task assigned successfully',
-            'data' => new TaskResource($task->load(['assignedUser']))
+            'data' => new TaskResource($task)
         ]);
     }
 }

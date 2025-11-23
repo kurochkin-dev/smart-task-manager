@@ -7,8 +7,8 @@ use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
+use App\Services\ProjectService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Cache;
 
 /**
  * @OA\Tag(
@@ -18,6 +18,8 @@ use Illuminate\Support\Facades\Cache;
  */
 class ProjectController extends Controller
 {
+    public function __construct(private readonly ProjectService $projectService) {}
+
     /**
      * @OA\Get(
      *     path="/api/projects",
@@ -32,9 +34,7 @@ class ProjectController extends Controller
     {
         $this->authorize('viewAny', Project::class);
 
-        $projects = Cache::remember('projects:list', config('cache_ttl.lists'), function () {
-            return Project::with(['tasks'])->get();
-        });
+        $projects = $this->projectService->getAllProjects();
 
         return response()->json([
             'success' => true,
@@ -59,9 +59,7 @@ class ProjectController extends Controller
     {
         $this->authorize('create', Project::class);
 
-        $project = Project::create($request->validated());
-
-        Cache::forget('projects:list');
+        $project = $this->projectService->createProject($request->validated());
 
         return response()->json([
             'success' => true,
@@ -86,10 +84,7 @@ class ProjectController extends Controller
     {
         $this->authorize('view', $project);
 
-        $cachedProject = Cache::remember("project:{$project->id}", config('cache_ttl.items'), function () use ($project) {
-            $project->load(['tasks.assignedUser', 'tasks.creator']);
-            return $project;
-        });
+        $cachedProject = $this->projectService->getProject($project->id);
 
         return response()->json([
             'success' => true,
@@ -116,11 +111,7 @@ class ProjectController extends Controller
     {
         $this->authorize('update', $project);
 
-        $project->update($request->validated());
-
-        Cache::forget("project:{$project->id}");
-        Cache::forget("tasks:project:{$project->id}");
-        Cache::forget('projects:list');
+        $project = $this->projectService->updateProject($project, $request->validated());
 
         return response()->json([
             'success' => true,
@@ -146,13 +137,7 @@ class ProjectController extends Controller
     {
         $this->authorize('delete', $project);
 
-        $projectId = $project->id;
-        $project->delete();
-
-        Cache::forget("project:{$projectId}");
-        Cache::forget("tasks:project:{$projectId}");
-        Cache::forget('projects:list');
-        Cache::forget('tasks:list');
+        $this->projectService->deleteProject($project);
 
         return response()->json([
             'success' => true,
