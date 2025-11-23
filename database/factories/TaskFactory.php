@@ -9,6 +9,9 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * @extends Factory<Task>
+ *
+ * @method Task create($attributes = [], ?\Illuminate\Database\Eloquent\Model $parent = null)
+ * @method Task make($attributes = [], ?\Illuminate\Database\Eloquent\Model $parent = null)
  */
 class TaskFactory extends Factory
 {

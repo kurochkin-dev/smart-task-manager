@@ -9,6 +9,9 @@ use Illuminate\Support\Str;
 
 /**
  * @extends Factory<User>
+ *
+ * @method User create($attributes = [], ?\Illuminate\Database\Eloquent\Model $parent = null)
+ * @method User make($attributes = [], ?\Illuminate\Database\Eloquent\Model $parent = null)
  */
 class UserFactory extends Factory
 {

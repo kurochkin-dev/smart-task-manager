@@ -22,12 +22,19 @@ use Illuminate\Support\Facades\Cache;
 class TaskController extends Controller
 {
     /**
-     * @OA\Get(path="/api/tasks", summary="Список задач", tags={"Tasks"},
-     *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse")
+     * @OA\Get(
+     *     path="/api/tasks",
+     *     summary="List tasks",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
+     *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated")
      * )
      */
     public function index(): JsonResponse
     {
+        $this->authorize('viewAny', Task::class);
+
         $tasks = Cache::remember('tasks:list', config('cache_ttl.lists'), function () {
             return Task::with(['project', 'assignedUser', 'creator'])->get();
         });
@@ -39,14 +46,22 @@ class TaskController extends Controller
     }
 
     /**
-     * @OA\Post(path="/api/tasks", summary="Создать задачу", tags={"Tasks"},
+     * @OA\Post(
+     *     path="/api/tasks",
+     *     summary="Create task",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
      *     @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/TaskInput")),
      *     @OA\Response(response=201, ref="#/components/responses/CreatedResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
      *     @OA\Response(response=422, ref="#/components/responses/ValidationError")
      * )
      */
     public function store(StoreTaskRequest $request): JsonResponse
     {
+        $this->authorize('create', Task::class);
+
         $task = Task::create($request->validated());
 
         Cache::forget('tasks:list');
@@ -59,20 +74,27 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Задача успешно создана',
+            'message' => 'Task created successfully',
             'data' => new TaskResource($task)
         ], 201);
     }
 
     /**
-     * @OA\Get(path="/api/tasks/{id}", summary="Получить задачу", tags={"Tasks"},
+     * @OA\Get(
+     *     path="/api/tasks/{id}",
+     *     summary="Get task",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, ref="#/components/responses/ItemResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, ref="#/components/responses/NotFound")
      * )
      */
     public function show(Task $task): JsonResponse
     {
+        $this->authorize('view', $task);
+
         $cachedTask = Cache::remember("task:{$task->id}", config('cache_ttl.items'), function () use ($task) {
             $task->load(['project', 'assignedUser', 'creator', 'taskLogs.user']);
             return $task;
@@ -85,16 +107,24 @@ class TaskController extends Controller
     }
 
     /**
-     * @OA\Put(path="/api/tasks/{id}", summary="Обновить задачу", tags={"Tasks"},
+     * @OA\Put(
+     *     path="/api/tasks/{id}",
+     *     summary="Update task",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/TaskInput")),
      *     @OA\Response(response=200, ref="#/components/responses/UpdatedResponse"),
-     *     @OA\Response(response=422, ref="#/components/responses/ValidationError"),
-     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound"),
+     *     @OA\Response(response=422, ref="#/components/responses/ValidationError")
      * )
      */
     public function update(UpdateTaskRequest $request, Task $task): JsonResponse
     {
+        $this->authorize('update', $task);
+
         $oldProjectId = $task->project_id;
         $oldAssignedUserId = $task->assigned_user_id;
 
@@ -119,20 +149,28 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Задача успешно обновлена',
+            'message' => 'Task updated successfully',
             'data' => new TaskResource($task)
         ]);
     }
 
     /**
-     * @OA\Delete(path="/api/tasks/{id}", summary="Удалить задачу", tags={"Tasks"},
+     * @OA\Delete(
+     *     path="/api/tasks/{id}",
+     *     summary="Delete task",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, ref="#/components/responses/DeletedResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
      *     @OA\Response(response=404, ref="#/components/responses/NotFound")
      * )
      */
     public function destroy(Task $task): JsonResponse
     {
+        $this->authorize('delete', $task);
+
         $projectId = $task->project_id;
         $assignedUserId = $task->assigned_user_id;
         $taskId = $task->id;
@@ -150,19 +188,27 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Задача успешно удалена'
+            'message' => 'Task deleted successfully'
         ]);
     }
 
     /**
-     * @OA\Get(path="/api/tasks/user/{user}", summary="Задачи пользователя", tags={"Tasks"},
+     * @OA\Get(
+     *     path="/api/tasks/user/{user}",
+     *     summary="Get user tasks",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="user", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
      *     @OA\Response(response=404, ref="#/components/responses/NotFound")
      * )
      */
     public function getUserTasks(User $user): JsonResponse
     {
+        $this->authorize('viewByUser', [Task::class, $user]);
+
         $tasks = Cache::remember("tasks:user:{$user->id}", config('cache_ttl.lists'), function () use ($user) {
             return Task::where('assigned_user_id', $user->id)
                 ->with(['project', 'creator'])
@@ -176,14 +222,21 @@ class TaskController extends Controller
     }
 
     /**
-     * @OA\Get(path="/api/tasks/project/{project}", summary="Задачи проекта", tags={"Tasks"},
+     * @OA\Get(
+     *     path="/api/tasks/project/{project}",
+     *     summary="Get project tasks",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="project", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, ref="#/components/responses/NotFound")
      * )
      */
     public function getProjectTasks(Project $project): JsonResponse
     {
+        $this->authorize('viewByProject', Task::class);
+
         $tasks = Cache::remember("tasks:project:{$project->id}", config('cache_ttl.lists'), function () use ($project) {
             return Task::where('project_id', $project->id)
                 ->with(['assignedUser', 'creator'])
@@ -197,19 +250,24 @@ class TaskController extends Controller
     }
 
     /**
-     * @OA\Post(path="/api/tasks/{task}/assign", summary="Назначить задачу", tags={"Tasks"},
+     * @OA\Post(
+     *     path="/api/tasks/{task}/assign",
+     *     summary="Assign task",
+     *     tags={"Tasks"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="task", in="path", required=true, @OA\Schema(type="integer")),
-     *     @OA\RequestBody(required=true, @OA\JsonContent(
-     *         required={"assigned_user_id"},
-     *         @OA\Property(property="assigned_user_id", type="integer", example=1)
-     *     )),
+     *     @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/AssignTaskInput")),
      *     @OA\Response(response=200, ref="#/components/responses/UpdatedResponse"),
-     *     @OA\Response(response=422, ref="#/components/responses/ValidationError"),
-     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound"),
+     *     @OA\Response(response=422, ref="#/components/responses/ValidationError")
      * )
      */
     public function assignTask(Request $request, Task $task): JsonResponse
     {
+        $this->authorize('assign', $task);
+
         $validated = $request->validate([
             'assigned_user_id' => 'required|exists:users,id'
         ]);
@@ -228,7 +286,7 @@ class TaskController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Задача успешно назначена',
+            'message' => 'Task assigned successfully',
             'data' => new TaskResource($task->load(['assignedUser']))
         ]);
     }

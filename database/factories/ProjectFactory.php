@@ -7,6 +7,9 @@ use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * @extends Factory<Project>
+ *
+ * @method Project create($attributes = [], ?\Illuminate\Database\Eloquent\Model $parent = null)
+ * @method Project make($attributes = [], ?\Illuminate\Database\Eloquent\Model $parent = null)
  */
 class ProjectFactory extends Factory
 {

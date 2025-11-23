@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 use App\Models\Task;
 use App\Models\Project;
@@ -14,6 +15,9 @@ class TaskControllerTest extends TestCase
 
     public function test_can_get_tasks_list(): void
     {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
         Task::factory()->count(3)->create();
 
         $response = $this->getJson('/api/tasks');
@@ -36,6 +40,9 @@ class TaskControllerTest extends TestCase
 
     public function test_can_create_task(): void
     {
+        $manager = User::factory()->create(['role' => 'manager']);
+        Sanctum::actingAs($manager);
+
         $project = Project::factory()->create();
         $creator = User::factory()->create();
 
@@ -61,7 +68,7 @@ class TaskControllerTest extends TestCase
             ])
             ->assertJson([
                 'success' => true,
-                'message' => 'Задача успешно создана'
+                'message' => 'Task created successfully'
             ]);
 
         $this->assertDatabaseHas('tasks', [
@@ -72,6 +79,9 @@ class TaskControllerTest extends TestCase
 
     public function test_can_get_specific_task(): void
     {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
         $task = Task::factory()->create();
 
         $response = $this->getJson("/api/tasks/{$task->id}");
@@ -96,6 +106,9 @@ class TaskControllerTest extends TestCase
 
     public function test_can_update_task(): void
     {
+        $manager = User::factory()->create(['role' => 'manager']);
+        Sanctum::actingAs($manager);
+
         $task = Task::factory()->create();
 
         $updateData = [
@@ -118,7 +131,7 @@ class TaskControllerTest extends TestCase
             ])
             ->assertJson([
                 'success' => true,
-                'message' => 'Задача успешно обновлена',
+                'message' => 'Task updated successfully',
                 'data' => [
                     'title' => 'Updated Task',
                     'status' => 'in_progress',
@@ -134,6 +147,9 @@ class TaskControllerTest extends TestCase
 
     public function test_can_delete_task(): void
     {
+        $manager = User::factory()->create(['role' => 'manager']);
+        Sanctum::actingAs($manager);
+
         $task = Task::factory()->create();
 
         $response = $this->deleteJson("/api/tasks/{$task->id}");
@@ -145,7 +161,7 @@ class TaskControllerTest extends TestCase
             ])
             ->assertJson([
                 'success' => true,
-                'message' => 'Задача успешно удалена'
+                'message' => 'Task deleted successfully'
             ]);
 
         $this->assertDatabaseMissing('tasks', ['id' => $task->id]);
@@ -154,6 +170,8 @@ class TaskControllerTest extends TestCase
     public function test_can_get_user_tasks(): void
     {
         $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
         Task::factory()->count(2)->create(['assigned_user_id' => $user->id]);
         Task::factory()->count(1)->create();
 
@@ -176,6 +194,9 @@ class TaskControllerTest extends TestCase
 
     public function test_can_get_project_tasks(): void
     {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
         $project = Project::factory()->create();
         Task::factory()->count(2)->create(['project_id' => $project->id]);
         Task::factory()->count(1)->create();
@@ -199,6 +220,9 @@ class TaskControllerTest extends TestCase
 
     public function test_can_assign_task_to_user(): void
     {
+        $manager = User::factory()->create(['role' => 'manager']);
+        Sanctum::actingAs($manager);
+
         $task = Task::factory()->create();
         $user = User::factory()->create();
 
@@ -216,7 +240,7 @@ class TaskControllerTest extends TestCase
             ])
             ->assertJson([
                 'success' => true,
-                'message' => 'Задача успешно назначена'
+                'message' => 'Task assigned successfully'
             ]);
 
         $this->assertDatabaseHas('tasks', [
@@ -227,6 +251,9 @@ class TaskControllerTest extends TestCase
 
     public function test_returns_404_for_nonexistent_task(): void
     {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
         $response = $this->getJson('/api/tasks/99999');
 
         $response->assertStatus(404);
@@ -234,11 +261,55 @@ class TaskControllerTest extends TestCase
 
     public function test_validation_fails_for_invalid_task_data(): void
     {
+        $manager = User::factory()->create(['role' => 'manager']);
+        Sanctum::actingAs($manager);
+
         $response = $this->postJson('/api/tasks', [
             'title' => '',
         ]);
 
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['title', 'project_id', 'created_by']);
+    }
+
+    public function test_user_role_cannot_create_tasks(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        Sanctum::actingAs($user);
+
+        $project = Project::factory()->create();
+
+        $response = $this->postJson('/api/tasks', [
+            'title' => 'Test Task',
+            'description' => 'Test Description',
+            'priority' => 'high',
+            'project_id' => $project->id,
+            'created_by' => $user->id,
+        ]);
+
+        $response->assertStatus(403);
+    }
+
+    public function test_assigned_user_can_update_own_task(): void
+    {
+        $user = User::factory()->create(['role' => 'user']);
+        Sanctum::actingAs($user);
+
+        $task = Task::factory()->create(['assigned_user_id' => $user->id]);
+
+        $response = $this->putJson("/api/tasks/{$task->id}", [
+            'title' => 'Updated by assigned user',
+            'description' => $task->description,
+            'status' => 'in_progress',
+            'priority' => $task->priority,
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'data' => [
+                    'title' => 'Updated by assigned user',
+                ]
+            ]);
     }
 }

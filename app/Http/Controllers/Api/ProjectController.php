@@ -19,12 +19,19 @@ use Illuminate\Support\Facades\Cache;
 class ProjectController extends Controller
 {
     /**
-     * @OA\Get(path="/api/projects", summary="Список проектов", tags={"Projects"},
-     *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse")
+     * @OA\Get(
+     *     path="/api/projects",
+     *     summary="List projects",
+     *     tags={"Projects"},
+     *     security={{"sanctum":{}}},
+     *     @OA\Response(response=200, ref="#/components/responses/CollectionResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated")
      * )
      */
     public function index(): JsonResponse
     {
+        $this->authorize('viewAny', Project::class);
+
         $projects = Cache::remember('projects:list', config('cache_ttl.lists'), function () {
             return Project::with(['tasks'])->get();
         });
@@ -36,34 +43,49 @@ class ProjectController extends Controller
     }
 
     /**
-     * @OA\Post(path="/api/projects", summary="Создать проект", tags={"Projects"},
+     * @OA\Post(
+     *     path="/api/projects",
+     *     summary="Create project",
+     *     tags={"Projects"},
+     *     security={{"sanctum":{}}},
      *     @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/ProjectInput")),
      *     @OA\Response(response=201, ref="#/components/responses/CreatedResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
      *     @OA\Response(response=422, ref="#/components/responses/ValidationError")
      * )
      */
     public function store(StoreProjectRequest $request): JsonResponse
     {
+        $this->authorize('create', Project::class);
+
         $project = Project::create($request->validated());
 
         Cache::forget('projects:list');
 
         return response()->json([
             'success' => true,
-            'message' => 'Проект успешно создан',
+            'message' => 'Project created successfully',
             'data' => new ProjectResource($project)
         ], 201);
     }
 
     /**
-     * @OA\Get(path="/api/projects/{id}", summary="Получить проект", tags={"Projects"},
+     * @OA\Get(
+     *     path="/api/projects/{id}",
+     *     summary="Get project",
+     *     tags={"Projects"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, ref="#/components/responses/ItemResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
      *     @OA\Response(response=404, ref="#/components/responses/NotFound")
      * )
      */
     public function show(Project $project): JsonResponse
     {
+        $this->authorize('view', $project);
+
         $cachedProject = Cache::remember("project:{$project->id}", config('cache_ttl.items'), function () use ($project) {
             $project->load(['tasks.assignedUser', 'tasks.creator']);
             return $project;
@@ -76,16 +98,24 @@ class ProjectController extends Controller
     }
 
     /**
-     * @OA\Put(path="/api/projects/{id}", summary="Обновить проект", tags={"Projects"},
+     * @OA\Put(
+     *     path="/api/projects/{id}",
+     *     summary="Update project",
+     *     tags={"Projects"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\RequestBody(required=true, @OA\JsonContent(ref="#/components/schemas/ProjectInput")),
      *     @OA\Response(response=200, ref="#/components/responses/UpdatedResponse"),
-     *     @OA\Response(response=422, ref="#/components/responses/ValidationError"),
-     *     @OA\Response(response=404, ref="#/components/responses/NotFound")
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
+     *     @OA\Response(response=404, ref="#/components/responses/NotFound"),
+     *     @OA\Response(response=422, ref="#/components/responses/ValidationError")
      * )
      */
     public function update(UpdateProjectRequest $request, Project $project): JsonResponse
     {
+        $this->authorize('update', $project);
+
         $project->update($request->validated());
 
         Cache::forget("project:{$project->id}");
@@ -94,20 +124,28 @@ class ProjectController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Проект успешно обновлен',
+            'message' => 'Project updated successfully',
             'data' => new ProjectResource($project)
         ]);
     }
 
     /**
-     * @OA\Delete(path="/api/projects/{id}", summary="Удалить проект", tags={"Projects"},
+     * @OA\Delete(
+     *     path="/api/projects/{id}",
+     *     summary="Delete project",
+     *     tags={"Projects"},
+     *     security={{"sanctum":{}}},
      *     @OA\Parameter(name="id", in="path", required=true, @OA\Schema(type="integer")),
      *     @OA\Response(response=200, ref="#/components/responses/DeletedResponse"),
+     *     @OA\Response(response=401, description="Unauthenticated"),
+     *     @OA\Response(response=403, description="Forbidden"),
      *     @OA\Response(response=404, ref="#/components/responses/NotFound")
      * )
      */
     public function destroy(Project $project): JsonResponse
     {
+        $this->authorize('delete', $project);
+
         $projectId = $project->id;
         $project->delete();
 
@@ -118,7 +156,7 @@ class ProjectController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'Проект успешно удален'
+            'message' => 'Project deleted successfully'
         ]);
     }
 }

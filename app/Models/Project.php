@@ -5,6 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @method static \Database\Factories\ProjectFactory factory($count = null, $state = [])
+ */
 class Project extends Model
 {
     use HasFactory;
