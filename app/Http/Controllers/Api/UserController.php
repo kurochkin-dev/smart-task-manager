@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateUserRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * @OA\Tag(
@@ -24,7 +25,9 @@ class UserController extends Controller
      */
     public function index(): JsonResponse
     {
-        $users = User::with(['tasks', 'createdTasks'])->get();
+        $users = Cache::remember('users:list', config('cache_ttl.lists'), function () {
+            return User::with(['tasks', 'createdTasks'])->get();
+        });
 
         return response()->json([
             'success' => true,
@@ -43,6 +46,8 @@ class UserController extends Controller
     {
         $user = User::create($request->validated());
 
+        Cache::forget('users:list');
+
         return response()->json([
             'success' => true,
             'message' => 'Пользователь успешно создан',
@@ -59,11 +64,14 @@ class UserController extends Controller
      */
     public function show(User $user): JsonResponse
     {
-        $user->load(['tasks', 'createdTasks', 'taskLogs']);
+        $cachedUser = Cache::remember("user:{$user->id}", config('cache_ttl.items'), function () use ($user) {
+            $user->load(['tasks', 'createdTasks', 'taskLogs']);
+            return $user;
+        });
 
         return response()->json([
             'success' => true,
-            'data' => new UserResource($user)
+            'data' => new UserResource($cachedUser)
         ]);
     }
 
@@ -79,6 +87,10 @@ class UserController extends Controller
     public function update(UpdateUserRequest $request, User $user): JsonResponse
     {
         $user->update($request->validated());
+
+        Cache::forget("user:{$user->id}");
+        Cache::forget("user:{$user->id}:workload");
+        Cache::forget('users:list');
 
         return response()->json([
             'success' => true,
@@ -96,7 +108,12 @@ class UserController extends Controller
      */
     public function destroy(User $user): JsonResponse
     {
+        $userId = $user->id;
         $user->delete();
+
+        Cache::forget("user:{$userId}");
+        Cache::forget("user:{$userId}:workload");
+        Cache::forget('users:list');
 
         return response()->json([
             'success' => true,
@@ -113,18 +130,22 @@ class UserController extends Controller
      */
     public function getWorkload(User $user): JsonResponse
     {
-        $usagePercentage = $user->max_workload > 0 
-            ? ($user->workload / $user->max_workload) * 100 
-            : 0;
+        $workload = Cache::remember("user:{$user->id}:workload", config('cache_ttl.workload'), function () use ($user) {
+            $usagePercentage = $user->max_workload > 0 
+                ? ($user->workload / $user->max_workload) * 100 
+                : 0;
 
-        return response()->json([
-            'success' => true,
-            'data' => [
+            return [
                 'user_id' => $user->id,
                 'current_workload' => $user->workload,
                 'max_workload' => $user->max_workload,
                 'usage_percentage' => round($usagePercentage, 2)
-            ]
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $workload
         ]);
     }
 }

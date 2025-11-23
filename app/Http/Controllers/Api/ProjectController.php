@@ -8,6 +8,7 @@ use App\Http\Requests\UpdateProjectRequest;
 use App\Http\Resources\ProjectResource;
 use App\Models\Project;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * @OA\Tag(
@@ -24,7 +25,9 @@ class ProjectController extends Controller
      */
     public function index(): JsonResponse
     {
-        $projects = Project::with(['tasks'])->get();
+        $projects = Cache::remember('projects:list', config('cache_ttl.lists'), function () {
+            return Project::with(['tasks'])->get();
+        });
 
         return response()->json([
             'success' => true,
@@ -43,6 +46,8 @@ class ProjectController extends Controller
     {
         $project = Project::create($request->validated());
 
+        Cache::forget('projects:list');
+
         return response()->json([
             'success' => true,
             'message' => 'Проект успешно создан',
@@ -59,11 +64,14 @@ class ProjectController extends Controller
      */
     public function show(Project $project): JsonResponse
     {
-        $project->load(['tasks.assignedUser', 'tasks.creator']);
+        $cachedProject = Cache::remember("project:{$project->id}", config('cache_ttl.items'), function () use ($project) {
+            $project->load(['tasks.assignedUser', 'tasks.creator']);
+            return $project;
+        });
 
         return response()->json([
             'success' => true,
-            'data' => new ProjectResource($project)
+            'data' => new ProjectResource($cachedProject)
         ]);
     }
 
@@ -79,6 +87,10 @@ class ProjectController extends Controller
     public function update(UpdateProjectRequest $request, Project $project): JsonResponse
     {
         $project->update($request->validated());
+
+        Cache::forget("project:{$project->id}");
+        Cache::forget("tasks:project:{$project->id}");
+        Cache::forget('projects:list');
 
         return response()->json([
             'success' => true,
@@ -96,7 +108,13 @@ class ProjectController extends Controller
      */
     public function destroy(Project $project): JsonResponse
     {
+        $projectId = $project->id;
         $project->delete();
+
+        Cache::forget("project:{$projectId}");
+        Cache::forget("tasks:project:{$projectId}");
+        Cache::forget('projects:list');
+        Cache::forget('tasks:list');
 
         return response()->json([
             'success' => true,
