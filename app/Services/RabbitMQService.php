@@ -8,11 +8,19 @@ use Illuminate\Support\Facades\Log;
 
 class RabbitMQService
 {
-    private AMQPStreamConnection $connection;
-    private $channel;
+    private ?AMQPStreamConnection $connection = null;
+    private $channel = null;
 
     public function __construct()
     {
+    }
+
+    private function connect(): void
+    {
+        if ($this->connection !== null) {
+            return;
+        }
+
         $this->connection = new AMQPStreamConnection(
             config('queue.connections.rabbitmq.host'),
             config('queue.connections.rabbitmq.port'),
@@ -42,6 +50,8 @@ class RabbitMQService
      */
     public function publish(string $exchange, string $routingKey, array $data): void
     {
+        $this->connect();
+
         $message = new AMQPMessage(
             json_encode($data),
             ['delivery_mode' => AMQPMessage::DELIVERY_MODE_PERSISTENT]
@@ -65,6 +75,8 @@ class RabbitMQService
      */
     public function consume(string $queue, callable $callback): void
     {
+        $this->connect();
+
         $this->channel->queue_declare(
             $queue,
             false,

@@ -3,10 +3,12 @@
 namespace Tests\Unit\Services;
 
 use App\Contracts\Repositories\TaskRepositoryInterface;
+use App\Events\TaskCreated;
 use App\Models\Task;
 use App\Services\CacheService;
 use App\Services\TaskService;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Event;
 use Mockery;
 use Tests\TestCase;
 
@@ -62,6 +64,8 @@ class TaskServiceTest extends TestCase
 
     public function test_create_task_calls_repository_and_invalidates_cache(): void
     {
+        Event::fake();
+
         $data = ['title' => 'Test Task'];
         $task = new Task($data);
 
@@ -79,6 +83,7 @@ class TaskServiceTest extends TestCase
         $result = $this->taskService->createTask($data);
 
         $this->assertEquals($task, $result);
+        Event::assertDispatched(TaskCreated::class);
     }
 
     public function test_update_task_calls_repository_and_invalidates_cache_with_old_relations(): void
