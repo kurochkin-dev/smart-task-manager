@@ -1,103 +1,103 @@
 # Task Optimizer Service
 
-Go-микросервис для интеллектуального распределения задач между исполнителями.
+Go microservice for intelligent task assignment.
 
-## Описание
+## Description
 
-Сервис автоматически назначает задачи пользователям на основе:
-- **Навыков** (skill matching): совпадение навыков пользователя с требованиями задачи
-- **Загруженности** (workload): текущее количество активных задач у пользователя
-- **Приоритета задачи**: более высокоприоритетные задачи получают бонус при расчете
+The service automatically assigns tasks to users based on:
+- **Skills** (skill matching): matching user skills with task requirements
+- **Workload**: current number of active tasks for the user
+- **Task Priority**: higher priority tasks receive a bonus in calculation
 
-## Архитектура
+## Architecture
 
-Проект построен на принципах **Clean Architecture**:
+Built with **Clean Architecture** principles:
 
 ```
-├── cmd/server/          # Точка входа приложения
+├── cmd/server/          # Application entry point
 ├── internal/
-│   ├── domain/          # Бизнес-логика (entities, services, interfaces)
+│   ├── domain/          # Business logic (entities, services, interfaces)
 │   ├── application/     # Use cases (orchestration)
-│   ├── infrastructure/  # Реализации (PostgreSQL, RabbitMQ, config)
+│   ├── infrastructure/  # Implementations (PostgreSQL, RabbitMQ, config)
 │   └── interfaces/      # Transport layer (handlers)
-└── pkg/                 # Переиспользуемые пакеты
+└── pkg/                 # Reusable packages
 ```
 
-## Алгоритм scoring
+## Scoring Algorithm
 
-Итоговый score рассчитывается по формуле:
+Total score is calculated using the formula:
 
 ```
 Total Score = (Skill Match × 0.4) + (Load Score × 0.4) + (Priority Bonus × 0.2)
 ```
 
-Где:
-- **Skill Match** (0.0-1.0): процент совпадения навыков пользователя с требованиями задачи
-- **Load Score** (0.0-1.0): инверсия загруженности (0% load = 1.0 score)
-- **Priority Bonus** (0.0-1.0): нормализованный приоритет задачи (1-5)
+Where:
+- **Skill Match** (0.0-1.0): percentage of user skills matching task requirements
+- **Load Score** (0.0-1.0): inverse of workload (0% load = 1.0 score)
+- **Priority Bonus** (0.0-1.0): normalized task priority (1-5)
 
-## Технологии
+## Technologies
 
-- **Go 1.22+**
-- **PostgreSQL** - чтение данных о пользователях
-- **RabbitMQ** - асинхронная коммуникация с Laravel
-- **Zap** - структурированное логирование
-- **Testify** - unit тестирование
+- **Go 1.25+**
+- **PostgreSQL** - user data access
+- **RabbitMQ** - asynchronous communication with Laravel
+- **Zap** - structured logging
+- **Testify** - unit testing
 
-## Запуск
+## Running
 
-### Через Docker Compose (рекомендуется)
+### Via Docker Compose (recommended)
 
 ```bash
-# Из корня проекта
+# From project root
 docker-compose up -d task-optimizer
 ```
 
-### Локально
+### Locally
 
 ```bash
-# Установить зависимости
+# Install dependencies
 go mod download
 
-# Скопировать .env
+# Copy environment file
 cp .env.example .env
 
-# Запустить
+# Run
 go run cmd/server/main.go
 ```
 
-## Тестирование
+## Testing
 
 ```bash
-# Запустить все тесты
+# Run all tests
 go test ./...
 
-# С покрытием
+# With coverage
 go test -cover ./...
 
-# Verbose режим
+# Verbose mode
 go test -v ./...
 ```
 
-## Переменные окружения
+## Environment Variables
 
-| Переменная | Описание | По умолчанию |
-|-----------|----------|--------------|
-| `DB_HOST` | PostgreSQL хост | `postgres` |
-| `DB_PORT` | PostgreSQL порт | `5432` |
-| `DB_USER` | PostgreSQL пользователь | `smart_task_user` |
-| `DB_PASSWORD` | PostgreSQL пароль | `secret` |
-| `DB_NAME` | PostgreSQL база данных | `smart_task_db` |
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DB_HOST` | PostgreSQL host | `postgres` |
+| `DB_PORT` | PostgreSQL port | `5432` |
+| `DB_USER` | PostgreSQL user | `smart_task_user` |
+| `DB_PASSWORD` | PostgreSQL password | `secret` |
+| `DB_NAME` | PostgreSQL database | `smart_task_db` |
 | `RABBITMQ_URL` | RabbitMQ connection string | `amqp://guest:guest@rabbitmq:5672/` |
 | `RABBITMQ_EXCHANGE` | RabbitMQ exchange | `tasks` |
-| `RABBITMQ_QUEUE_TASK_CREATED` | Queue для входящих событий | `task.created` |
-| `RABBITMQ_QUEUE_TASK_ASSIGNED` | Queue для исходящих событий | `task.assigned` |
-| `LOG_LEVEL` | Уровень логирования | `info` |
-| `WORKER_COUNT` | Количество воркеров | `5` |
+| `RABBITMQ_QUEUE_TASK_CREATED` | Queue for incoming events | `task.created` |
+| `RABBITMQ_QUEUE_TASK_ASSIGNED` | Queue for outgoing events | `task.assigned` |
+| `LOG_LEVEL` | Logging level | `info` |
+| `WORKER_COUNT` | Number of workers | `5` |
 
-## События
+## Events
 
-### Входящие события (task.created)
+### Incoming Events (task.created)
 
 ```json
 {
@@ -111,7 +111,7 @@ go test -v ./...
 }
 ```
 
-### Исходящие события (task.assigned)
+### Outgoing Events (task.assigned)
 
 ```json
 {
@@ -125,5 +125,4 @@ go test -v ./...
 
 ## Graceful Shutdown
 
-Сервис корректно обрабатывает сигналы `SIGINT` и `SIGTERM`, завершая обработку текущих сообщений перед остановкой.
-
+The service properly handles `SIGINT` and `SIGTERM` signals, completing processing of current messages before shutdown.
