@@ -78,8 +78,53 @@ jobs:
           REDIS_PORT: 6379
         run: php artisan test
 
+  test-go:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smart_task_manager_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+
+      - name: Cache Go modules
+        uses: actions/cache@v3
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Install Go dependencies
+        working-directory: ./services/task-optimizer
+        run: go mod download
+
+      - name: Run Go tests
+        working-directory: ./services/task-optimizer
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Display test coverage
+        working-directory: ./services/task-optimizer
+        run: go tool cover -func=coverage.out
+
   build:
-    needs: test
+    needs: [test, test-go]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master'
 

@@ -111,8 +111,50 @@ Smart Task Manager is a full-stack application that automatically assigns tasks 
 7. **Access the application**
    - API: http://localhost:8000/api
    - API Documentation: http://localhost:8000/api/documentation
+   - RabbitMQ Management: http://localhost:15672 (admin/admin)
    - Prometheus: http://localhost:9090
    - Grafana: http://localhost:3000
+
+8. **Start RabbitMQ consumer (optional)**
+   ```bash
+   docker-compose exec app php artisan rabbitmq:consume-task-assigned
+   ```
+
+## Go Microservice
+
+The Task Optimizer service is a Go microservice that automatically assigns tasks to users based on intelligent scoring.
+
+### Architecture
+
+Built with **Clean Architecture** principles:
+- **Domain Layer**: Core business logic (entities, services)
+- **Application Layer**: Use cases and orchestration
+- **Infrastructure Layer**: PostgreSQL, RabbitMQ implementations
+- **Interfaces Layer**: Event handlers
+
+### Scoring Algorithm
+
+```
+Total Score = (Skill Match × 0.4) + (Load Score × 0.4) + (Priority Bonus × 0.2)
+```
+
+**Factors:**
+- **Skills**: Percentage match of user skills with task requirements
+- **Workload**: User's current load (fewer tasks = higher score)
+- **Priority**: Task priority (1-5) bonus
+
+### Testing Go Service
+
+```bash
+# Run tests
+cd services/task-optimizer
+go test ./...
+
+# With coverage
+go test -cover ./...
+```
+
+For more details, see [services/task-optimizer/README.md](services/task-optimizer/README.md)
 
 ## Development Roadmap
 
@@ -139,10 +181,21 @@ Smart Task Manager is a full-stack application that automatically assigns tasks 
   - ✅ CacheService for centralized cache management
   - ✅ Dependency injection via RepositoryServiceProvider
   - ✅ Unit tests for all services
+- **Stage 6**: Intelligent Task Assignment (Go Microservice)
+  - ✅ Go microservice with Clean Architecture
+  - ✅ Domain layer (entities, services, interfaces)
+  - ✅ Application layer (use cases)
+  - ✅ Infrastructure layer (PostgreSQL, RabbitMQ)
+  - ✅ Intelligent scoring algorithm (skills, workload, priority)
+  - ✅ Event-driven communication via RabbitMQ
+  - ✅ Laravel integration (events, jobs, consumers)
+  - ✅ Docker containerization
+  - ✅ Unit tests with 90%+ coverage
+  - ✅ CI/CD pipeline for Go tests
 
 ### 🚧 Upcoming Stages
 
-- **Stage 6**: Intelligent Task Assignment (Go Microservice)
+- **Stage 7**: Queues and Asynchrony Enhancements
   - Go service for task distribution algorithms
   - Scoring based on skills, workload, priorities
   - Integration with Laravel via message queue

@@ -3,8 +3,10 @@
 namespace App\Services;
 
 use App\Contracts\Repositories\TaskRepositoryInterface;
+use App\Events\TaskCreated;
 use App\Models\Task;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Facades\Log;
 
 readonly class TaskService
 {
@@ -32,6 +34,8 @@ readonly class TaskService
     {
         $task = $this->taskRepository->create($data);
         $this->cacheService->invalidateTask($task);
+
+        event(new TaskCreated($task));
 
         return $task;
     }
@@ -78,12 +82,26 @@ readonly class TaskService
         );
     }
 
-    public function assignTask(Task $task, int $userId): Task
+    public function assignTask(int|Task $taskOrId, int $userId, array $metadata = []): Task
     {
+        $task = is_int($taskOrId) ? $this->getTask($taskOrId) : $taskOrId;
+
+        if (!$task) {
+            throw new \InvalidArgumentException("Task not found");
+        }
+
         $oldAssignedUserId = $task->assigned_user_id;
 
         $task = $this->taskRepository->assignToUser($task, $userId);
         $this->cacheService->invalidateTaskWithOldRelations($task, null, $oldAssignedUserId);
+
+        if (!empty($metadata)) {
+            Log::info('Task assigned via microservice', [
+                'task_id' => $task->id,
+                'assignee_id' => $userId,
+                'metadata' => $metadata,
+            ]);
+        }
 
         return $task;
     }

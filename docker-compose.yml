@@ -94,6 +94,31 @@ services:
     networks:
       - smart-task-manager
 
+  task-optimizer:
+    build:
+      context: ./services/task-optimizer
+      dockerfile: Dockerfile
+    container_name: smart-task-manager-optimizer
+    restart: unless-stopped
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=smart_task_manager
+      - DB_SSLMODE=disable
+      - RABBITMQ_URL=amqp://admin:admin@rabbitmq:5672/
+      - RABBITMQ_EXCHANGE=tasks
+      - RABBITMQ_QUEUE_TASK_CREATED=task.created
+      - RABBITMQ_QUEUE_TASK_ASSIGNED=task.assigned
+      - LOG_LEVEL=info
+      - WORKER_COUNT=5
+    depends_on:
+      - db
+      - rabbitmq
+    networks:
+      - smart-task-manager
+
 volumes:
   postgres_data:
   grafana_data:
